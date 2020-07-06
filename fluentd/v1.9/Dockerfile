@@ -1,4 +1,5 @@
 FROM fluent/fluentd:v1.9
+LABEL maintainer="Kien Nguyen-Tuan <kiennt2609@gmail.com>"
 # Use root account to use apk
 USER root
 
