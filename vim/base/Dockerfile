@@ -14,4 +14,5 @@ USER vimuser
 RUN curl -k -fLo $HOME/.vim/autoload/plug.vim --create-dirs \
     https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 COPY .vimrc $HOME/.vimrc
+RUN chown $HOME/.vimrc
 CMD vim
