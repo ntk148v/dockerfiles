@@ -3,7 +3,7 @@ LABEL maintainer="Kien Nguyen-Tuan <kiennt2609@gmail.com>"
 # environment variables
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && \
-    apt-get -y install --no-install-recommends vim git fontconfig curl fonts-powerline && \
+    apt-get -y install --no-install-recommends vim git fontconfig curl fonts-powerline ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 RUN adduser --disabled-password --gecos '' vimuser && \
     echo "ALL            ALL = (ALL) NOPASSWD: ALL" >> /etc/sudoers
