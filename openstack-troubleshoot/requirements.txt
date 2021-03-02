@@ -1,0 +1,4 @@
+python-openstackclient==5.4.0
+python-heatclient==2.3.0
+python-octaviaclient==2.2.0
+python-mistralclient==4.2.0
