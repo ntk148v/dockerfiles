@@ -22,5 +22,6 @@ jobs:
 
       - name: Run buidl script
         run: |
+          ls -la
           bash conductor/build-images.sh
         shell: bash
