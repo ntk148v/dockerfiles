@@ -14,7 +14,7 @@ while IFS= read -r line; do
     else
         echo "Docker image kiennt26/conductor:$tag not exist, let's build it!"
         # Get release
-        curl -sL https://github.com/netflix/conductor/releases/download/$tag/$tag.zip >$tag.zip
+        curl -sL https://github.com/Netflix/conductor/archive/refs/tags/$tag.zip >$tag.zip
         unzip $tag.zip -d $tag
         # Build images
         docker build -t kiennt26/conductor-serer:$tag -f $tag/docker/server/Dockerfile ./$tag
