@@ -9,15 +9,15 @@ curl -sL https://api.github.com/repos/netflix/conductor/releases | jq -r ".[].ta
 
 while IFS= read -r line; do
     tag=$line
-    if docker_tag_exists kiennt26/conductor $tag; then
-        echo "Docker image kiennt26/conductor:$tag exist, skip..."
+    if docker_tag_exists kiennt26/conductor ${tag}; then
+        echo "Docker image kiennt26/conductor:${tag} exist, skip..."
     else
-        echo "Docker image kiennt26/conductor:$tag not exist, let's build it!"
+        echo "Docker image kiennt26/conductor:${tag} not exist, let's build it!"
         # Get release
-        curl -sL https://github.com/Netflix/conductor/archive/refs/tags/$tag.zip >$tag.zip
-        unzip $tag.zip -d $tag
+        curl -sL https://github.com/Netflix/conductor/archive/refs/tags/${tag}.zip >${tag}.zip
+        unzip -q ${tag}.zip -d ${tag}
         # Build images
-        docker build -t kiennt26/conductor-serer:$tag -f $tag/docker/server/Dockerfile ./$tag
-        docker push kiennt26/conductor-serer:$tag
+        docker build -t kiennt26/conductor-serer:${tag} -f ${tag}/conductor-${tag//v}/docker/server/Dockerfile ./${tag}/conductor-${tag//v}
+        docker push kiennt26/conductor-serer:${tag}
     fi
 done </tmp/releases.txt
