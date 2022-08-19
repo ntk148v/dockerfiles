@@ -10,17 +10,26 @@ curl -sL https://api.github.com/repos/netflix/conductor/releases | jq -r ".[].ta
 # Clone
 git clone https://github.com/netflix/conductor.git conductor-source
 
-while IFS= read -r line; do
-    tag=$line
-    if docker_tag_exists kiennt26/conductor ${tag}; then
-        echo "Docker image kiennt26/conductor:${tag} exist, skip..."
+function build_image() {
+    image=$1
+    tag=$2
+    dockerfile=$3
+    if docker_tag_exists kiennt26/${image} ${tag}; then
+        echo "## Docker image kiennt26/${image}:${tag} exists, skip..."
     else
-        echo "Docker image kiennt26/conductor:${tag} not exist, let's build it!"
+        echo "## Docker image kiennt26/${image}:${tag} not exist, let's build it"
         cd conductor-source
         git checkout tags/${tag}
         # Build images
-        docker build -t kiennt26/conductor-serer:${tag} -f docker/server/Dockerfile .
-        docker push kiennt26/conductor-serer:${tag}
+        docker build -q -t kiennt26/${image}:${tag} -f ${dockerfile} .
+        docker push kiennt26/${image}:${tag}
         cd -
     fi
+}
+
+while IFS= read -r line; do
+    tag=$line
+    build_image netflix-conductor-server ${tag} docker/server/Dockerfile
+    build_image netflix-conductor-ui ${tag} docker/ui/Dockerfile
+    build_image netflix-conductor-aio ${tag} docker/serverAndUI/Dockerfile
 done </tmp/releases.txt
