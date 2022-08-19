@@ -16,6 +16,7 @@
 
 - Netflix Conductor has Dockerfiles for building but I can't find any images in Docker Hub.
 - Therefore, I create this repository which leverages Github action to check and build Conductor's image.
+- Checkout [build script](https://github.com/ntk148v/dockerfiles/blob/master/conductor/build-images.sh).
 
 ## How to use
 
