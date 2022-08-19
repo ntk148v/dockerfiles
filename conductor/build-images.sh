@@ -23,6 +23,8 @@ function build_image() {
         # Build images
         docker build -q -t kiennt26/${image}:${tag} -f ${dockerfile} .
         docker push kiennt26/${image}:${tag}
+        # Clean up
+        docker rmi -f kiennt26/${image}:${tag}
         cd -
     fi
 }
