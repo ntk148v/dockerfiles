@@ -1,7 +1,12 @@
 #!/bin/bash
 
 function docker_tag_exists() {
-    curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 >/dev/null
+    # curl --silent -f -lSL https://index.docker.io/v1/repositories/$1/tags/$2 >/dev/null
+    http_code=$(curl -I --silent -f -lSL -w "%{http_code}\n" --output /dev/null https://hub.docker.com/v2/namespaces/$1/repositories/$2/tags/$3)
+    if [[ $http_code != "200" ]]; then
+        return 1
+    fi
+    return 0
 }
 
 # Get all releases
@@ -14,7 +19,7 @@ function build_image() {
     image=$1
     tag=$2
     dockerfile=$3
-    if docker_tag_exists kiennt26/${image} ${tag}; then
+    if docker_tag_exists kiennt26 ${image} ${tag}; then
         echo "## Docker image kiennt26/${image}:${tag} exists, skip..."
     else
         echo "## Docker image kiennt26/${image}:${tag} not exist, let's build it"
