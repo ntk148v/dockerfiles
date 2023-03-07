@@ -1,4 +1,4 @@
-name: Build and Push
+name: Build and Push Condutor
 on:
   workflow_dispatch:
   schedule:
