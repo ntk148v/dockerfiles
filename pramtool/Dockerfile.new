@@ -1,0 +1,2 @@
+FROM kiennt26/pramtool:v2.52.0-v0.27.0
+COPY amtool /bin/amtool

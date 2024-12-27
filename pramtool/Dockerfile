@@ -10,7 +10,6 @@ RUN wget -qO- "https://github.com/prometheus/alertmanager/releases/download/v${A
     wget -qO- "https://github.com/prometheus/prometheus/releases/download/v${PROMTOOL_VERSION}/prometheus-${PROMTOOL_VERSION}.linux-amd64.tar.gz" \
     | tar xvzf - "prometheus-${PROMTOOL_VERSION}.linux-amd64"/promtool --strip-components=1
 
-
 FROM alpine:3.19
 COPY --from=0 /tmp/promtool /tmp/amtool /bin/
 CMD ["/bin/sh"]
