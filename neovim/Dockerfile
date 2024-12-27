@@ -1,8 +1,7 @@
 FROM alpine:latest
 LABEL maintainer="Kien Nguyen-Tuan <kiennt2609@gmail.com>"
 
-ENV VERSION v0.6.1
-
+ARG VERSION v0.10.3
 RUN apk add --no-cache build-base \
     cmake \
     automake \
