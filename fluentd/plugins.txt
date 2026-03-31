@@ -1,0 +1,8 @@
+# Fluentd plugins configuration
+# Format: plugin-name -v version (compatible with gem install)
+# Each line represents one plugin with a pinned version
+fluent-plugin-elasticsearch -v 6.0.0
+fluent-plugin-grok-parser -v 2.6.2
+fluent-plugin-prometheus -v 2.2.2
+fluent-plugin-rewrite-tag-filter -v 2.4.0
+fluent-plugin-record-modifier -v 2.2.1

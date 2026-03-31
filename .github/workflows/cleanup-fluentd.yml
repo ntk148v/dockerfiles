@@ -1,0 +1,214 @@
+name: Cleanup Fluentd Images
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Run cleanup script
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+        run: |
+          python3 << 'EOF'
+          import os
+          import re
+          import sys
+          import time
+          from datetime import datetime, timedelta
+          from collections import defaultdict
+          import requests
+          import json
+
+          # Configuration
+          USERNAME = os.environ.get('DOCKERHUB_USERNAME')
+          PASSWORD = os.environ.get('DOCKERHUB_PASSWORD')
+          REPO_NAME = 'fluentd'
+          KEEP_LAST_N = 5
+          MIN_AGE_DAYS = 7
+
+          def log(message):
+              """Log message with timestamp"""
+              timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+              print(f"[{timestamp}] {message}")
+              sys.stdout.flush()
+
+          def get_jwt_token():
+              """Get JWT token from Docker Hub"""
+              url = "https://hub.docker.com/v2/users/login/"
+              try:
+                  response = requests.post(url, json={
+                      "username": USERNAME,
+                      "password": PASSWORD
+                  })
+                  response.raise_for_status()
+                  return response.json()['token']
+              except Exception as e:
+                  log(f"ERROR: Failed to get JWT token: {e}")
+                  return None
+
+          def list_tags(token):
+              """List all tags from Docker Hub"""
+              tags = []
+              url = f"https://hub.docker.com/v2/repositories/{USERNAME}/{REPO_NAME}/tags/?page_size=100"
+              
+              while url:
+                  try:
+                      headers = {"Authorization": f"JWT {token}"}
+                      response = requests.get(url, headers=headers)
+                      response.raise_for_status()
+                      data = response.json()
+                      
+                      for tag in data.get('results', []):
+                          tags.append(tag)
+                      
+                      url = data.get('next')
+                  except Exception as e:
+                      log(f"ERROR: Failed to list tags: {e}")
+                      break
+              
+              return tags
+
+          def parse_tag_name(tag_name):
+              """Parse tag name to extract version, arch, and build number"""
+              # Pattern: v1.17-debian-1.0, v1.17-arm64-1.0, etc.
+              match = re.match(r'^v(\d+\.\d+)-([a-z0-9]+)-(\d+)\.(\d+)$', tag_name)
+              if match:
+                  version = match.group(1)
+                  arch = match.group(2)
+                  build_major = int(match.group(3))
+                  build_minor = int(match.group(4))
+                  return {
+                      'version': version,
+                      'arch': arch,
+                      'build_number': build_major * 1000 + build_minor,
+                      'build_str': f"{build_major}.{build_minor}"
+                  }
+              return None
+
+          def delete_tag(token, tag_name):
+              """Delete a tag from Docker Hub"""
+              url = f"https://hub.docker.com/v2/repositories/{USERNAME}/{REPO_NAME}/tags/{tag_name}/"
+              try:
+                  headers = {"Authorization": f"JWT {token}"}
+                  response = requests.delete(url, headers=headers)
+                  if response.status_code == 204:
+                      return True
+                  else:
+                      log(f"ERROR: Failed to delete tag {tag_name}: HTTP {response.status_code}")
+                      return False
+              except Exception as e:
+                  log(f"ERROR: Failed to delete tag {tag_name}: {e}")
+                  return False
+
+          def get_tag_age(tag_info):
+              """Get age of tag in days"""
+              last_updated = tag_info.get('last_updated')
+              if last_updated:
+                  try:
+                      updated_time = datetime.strptime(last_updated, '%Y-%m-%dT%H:%M:%S.%fZ')
+                      age = datetime.now(datetime.timezone.utc) - updated_time.replace(tzinfo=datetime.timezone.utc)
+                      return age.days
+                  except Exception as e:
+                      log(f"WARNING: Could not parse date for tag: {e}")
+              return 0
+
+          def main():
+              log("Starting Fluentd image cleanup...")
+              log(f"Repository: {USERNAME}/{REPO_NAME}")
+              log(f"Retention policy: Keep last {KEEP_LAST_N} builds per version/arch")
+              log(f"Minimum age: {MIN_AGE_DAYS} days")
+              
+              # Get JWT token
+              token = get_jwt_token()
+              if not token:
+                  log("CRITICAL: Could not authenticate with Docker Hub. Exiting.")
+                  sys.exit(1)
+              
+              log("Successfully authenticated with Docker Hub")
+              
+              # List all tags
+              log("Fetching all tags...")
+              tags = list_tags(token)
+              log(f"Found {len(tags)} tags")
+              
+              # Group tags by version/arch
+              grouped_tags = defaultdict(list)
+              for tag in tags:
+                  tag_name = tag['name']
+                  parsed = parse_tag_name(tag_name)
+                  
+                  if parsed:
+                      key = f"{parsed['version']}-{parsed['arch']}"
+                      grouped_tags[key].append({
+                          'name': tag_name,
+                          'build_number': parsed['build_number'],
+                          'build_str': parsed['build_str'],
+                          'age_days': get_tag_age(tag),
+                          'last_updated': tag.get('last_updated')
+                      })
+                  else:
+                      log(f"WARNING: Could not parse tag: {tag_name}")
+              
+              log(f"Grouped tags into {len(grouped_tags)} version/arch combinations")
+              
+              # Process each group
+              total_deleted = 0
+              total_kept = 0
+              
+              for key, tag_list in grouped_tags.items():
+                  log(f"\nProcessing {key}: {len(tag_list)} tags")
+                  
+                  # Sort by build number (descending)
+                  tag_list.sort(key=lambda x: x['build_number'], reverse=True)
+                  
+                  # Determine which tags to keep and which to delete
+                  tags_to_keep = []
+                  tags_to_delete = []
+                  
+                  for i, tag in enumerate(tag_list):
+                      if i < KEEP_LAST_N:
+                          tags_to_keep.append(tag)
+                      elif tag['age_days'] >= MIN_AGE_DAYS:
+                          tags_to_delete.append(tag)
+                      else:
+                          # Too young to delete, keep it
+                          tags_to_keep.append(tag)
+                          log(f"  Keeping {tag['name']} (too young: {tag['age_days']} days)")
+                  
+                  # Log tags to keep
+                  for tag in tags_to_keep:
+                      log(f"  Keeping {tag['name']} (build {tag['build_str']}, age {tag['age_days']} days)")
+                  
+                  # Delete old tags
+                  for tag in tags_to_delete:
+                      log(f"  Deleting {tag['name']} (build {tag['build_str']}, age {tag['age_days']} days)")
+                      if delete_tag(token, tag['name']):
+                          log(f"    ✓ Successfully deleted {tag['name']}")
+                          total_deleted += 1
+                      else:
+                          log(f"    ✗ Failed to delete {tag['name']}")
+                  
+                  total_kept += len(tags_to_keep)
+              
+              log(f"\n=== Cleanup Summary ===")
+              log(f"Total tags processed: {len(tags)}")
+              log(f"Total tags kept: {total_kept}")
+              log(f"Total tags deleted: {total_deleted}")
+              log("Cleanup completed successfully")
+
+          if __name__ == "__main__":
+              main()
+          EOF

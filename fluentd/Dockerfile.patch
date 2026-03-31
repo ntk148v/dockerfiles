@@ -1,0 +1,15 @@
+--- Dockerfile
++++ Dockerfile
+@@ -23,6 +23,11 @@
+  && gem install async -v 1.32.1 \
+  && gem install async-http -v 0.64.2 \
+  && gem install fluentd -v 1.17.1 \
++ && gem install fluent-plugin-elasticsearch \
++ && gem install fluent-plugin-grok-parser \
++ && gem install fluent-plugin-prometheus \
++ && gem install fluent-plugin-rewrite-tag-filter \
++ && gem install fluent-plugin-record-modifier \
+  && export GEM_DIR=$(ruby -e 'puts Gem.dir') \
+  && echo GEM_DIR=$GEM_DIR \
+  && rm -rf $GEM_DIR/cache/*.gem \
+
