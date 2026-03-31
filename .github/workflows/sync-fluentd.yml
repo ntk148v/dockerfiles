@@ -55,6 +55,12 @@ jobs:
         run: |
           git clone https://github.com/fluent/fluentd-docker-image.git /tmp/fluentd-docker-image
 
+      - name: Clean existing Dockerfiles
+        if: steps.check-upstream.outputs.result == 'changed'
+        run: |
+          cd fluentd
+          make clean
+
       - name: Generate Dockerfiles for all versions and architectures
         if: steps.check-upstream.outputs.result == 'changed'
         run: |
