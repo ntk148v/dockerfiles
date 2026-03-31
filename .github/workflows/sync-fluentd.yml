@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Setup Git config
         run: |
@@ -81,26 +83,59 @@ jobs:
           cd fluentd
           echo "${{ steps.get-sha.outputs.sha }}" > .last-upstream-sync
 
-      - name: Create Pull Request
+      - name: Check for conflicts
         if: steps.check-upstream.outputs.result == 'changed'
+        id: check-conflicts
+        run: |
+          # Check if there are any changes to files outside of v*/ directories
+          git add -A
+          git status --porcelain | grep -E "^\s*M\s+fluentd/(v[0-9]+\.[0-9]+/|\.last-upstream-sync)" > /tmp/expected_changes.txt || true
+          git status --porcelain | grep -vE "^\s*M\s+fluentd/(v[0-9]+\.[0-9]+/|\.last-upstream-sync)" | grep -vE "^\?\?" > /tmp/other_changes.txt || true
+          
+          if [ -s /tmp/other_changes.txt ]; then
+            echo "conflict=true" >> $GITHUB_OUTPUT
+            echo "Conflicts detected in non-Dockerfile files:"
+            cat /tmp/other_changes.txt
+          else
+            echo "conflict=false" >> $GITHUB_OUTPUT
+            echo "No conflicts - only Dockerfile changes detected"
+          fi
+
+      - name: Commit changes directly to main
+        if: steps.check-upstream.outputs.result == 'changed' && steps.check-conflicts.outputs.conflict == 'false'
+        run: |
+          git add -A
+          git commit -m "chore: sync with upstream fluentd-docker-image
+
+Upstream commit: ${{ steps.get-sha.outputs.sha }}
+
+Updated Dockerfiles:
+- v1.17 (debian, arm64, armhf)
+- v1.18 (debian, arm64, armhf)
+- v1.19 (debian, arm64, armhf)"
+          git push origin HEAD:main
+
+      - name: Create Pull Request for conflicts
+        if: steps.check-upstream.outputs.result == 'changed' && steps.check-conflicts.outputs.conflict == 'true'
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: sync/upstream-update-${{ github.run_number }}
-          title: Sync with upstream fluentd-docker-image
+          title: "[MANUAL REVIEW REQUIRED] Sync with upstream fluentd-docker-image"
           body: |
             Automated sync with upstream fluent/fluentd-docker-image repository.
 
-            This PR updates the Dockerfiles to reflect the latest changes from upstream.
+            **⚠️ CONFLICTS DETECTED - Manual review required**
 
-            **Changes:**
-            - Updated Dockerfiles for v1.17 (debian, arm64, armhf)
-            - Updated Dockerfiles for v1.18 (debian, arm64, armhf)
-            - Updated Dockerfiles for v1.19 (debian, arm64, armhf)
+            Changes were detected in files outside of the generated Dockerfiles.
+            This may indicate:
+            - Upstream structural changes
+            - Manual modifications that conflict with automation
+            - New files that need review
 
             **Upstream commit:** ${{ steps.get-sha.outputs.sha }}
 
-            This PR was created by the weekly sync workflow.
-          commit-message: "chore: sync with upstream fluentd-docker-image"
-          labels: automated, sync
+            **Please review all changes carefully before merging.**
+          commit-message: "chore: sync with upstream fluentd-docker-image (with conflicts)"
+          labels: automated, sync, needs-review
           delete-branch: true
