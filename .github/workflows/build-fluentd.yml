@@ -2,14 +2,14 @@ name: Build and Push Fluentd
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - fluentd/**
   pull_request:
     types:
       - closed
     branches:
-      - main
+      - master
     paths:
       - fluentd/**
   workflow_dispatch:
@@ -45,3 +45,4 @@ jobs:
           push: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true) }}
           tags: kiennt26/fluentd:v${{ matrix.version }}-${{ matrix.arch }}-1.0
           platforms: linux/amd64,linux/arm64,linux/arm/v7
+
