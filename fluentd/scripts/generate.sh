@@ -75,6 +75,17 @@ trap "rm -rf ${TEMP_DIR}" EXIT
 info "Copying upstream Dockerfile from: ${UPSTREAM_DOCKERFILE}"
 cp "$UPSTREAM_DOCKERFILE" "${TEMP_DIR}/Dockerfile"
 
+# Copy supporting files (entrypoint.sh and fluent.conf)
+UPSTREAM_DIR=$(dirname "$UPSTREAM_DOCKERFILE")
+if [ -f "${UPSTREAM_DIR}/entrypoint.sh" ]; then
+    info "Copying entrypoint.sh from: ${UPSTREAM_DIR}"
+    cp "${UPSTREAM_DIR}/entrypoint.sh" "${TEMP_DIR}/entrypoint.sh"
+fi
+if [ -f "${UPSTREAM_DIR}/fluent.conf" ]; then
+    info "Copying fluent.conf from: ${UPSTREAM_DIR}"
+    cp "${UPSTREAM_DIR}/fluent.conf" "${TEMP_DIR}/fluent.conf"
+fi
+
 info "Adding fluent-plugin installations..."
 awk '/gem install fluentd -v/ {
     print
@@ -95,6 +106,16 @@ mv "${TEMP_DIR}/Dockerfile.new" "${TEMP_DIR}/Dockerfile"
 
 info "Moving patched Dockerfile to: ${OUTPUT_DOCKERFILE}"
 mv "${TEMP_DIR}/Dockerfile" "$OUTPUT_DOCKERFILE"
+
+# Copy supporting files to output directory
+if [ -f "${TEMP_DIR}/entrypoint.sh" ]; then
+    info "Copying entrypoint.sh to: ${OUTPUT_DIR}"
+    cp "${TEMP_DIR}/entrypoint.sh" "${OUTPUT_DIR}/entrypoint.sh"
+fi
+if [ -f "${TEMP_DIR}/fluent.conf" ]; then
+    info "Copying fluent.conf to: ${OUTPUT_DIR}"
+    cp "${TEMP_DIR}/fluent.conf" "${OUTPUT_DIR}/fluent.conf"
+fi
 
 if [ ! -f "$OUTPUT_DOCKERFILE" ]; then
     error_exit "Output Dockerfile was not created: ${OUTPUT_DOCKERFILE}"
