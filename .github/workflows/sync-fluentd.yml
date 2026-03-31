@@ -1,0 +1,100 @@
+name: Sync Fluentd Upstream
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  sync-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Git config
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check upstream for changes
+        id: check-upstream
+        run: |
+          cd fluentd
+          RESULT=$(./scripts/check-upstream.sh)
+          echo "result=$RESULT" >> $GITHUB_OUTPUT
+          echo "Upstream check result: $RESULT"
+
+      - name: Exit if no changes
+        if: steps.check-upstream.outputs.result != 'changed'
+        run: |
+          echo "No changes detected in upstream. Exiting."
+          exit 0
+
+      - name: Get latest upstream commit SHA
+        if: steps.check-upstream.outputs.result == 'changed'
+        id: get-sha
+        run: |
+          cd fluentd
+          UPSTREAM_REPO="fluent/fluentd-docker-image"
+          API_URL="https://api.github.com/repos/${UPSTREAM_REPO}/commits"
+          TARGET_PATH="Dockerfile.template.erb"
+          LATEST_COMMIT=$(python3 -c "
+          import urllib.request, json, sys
+          try:
+              data = json.load(urllib.request.urlopen('${API_URL}?path=${TARGET_PATH}&per_page=1', timeout=30))
+              print(data[0]['sha'] if data else '')
+          except Exception:
+              pass
+          " 2>/dev/null || echo "")
+          echo "sha=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+          echo "Latest upstream commit: $LATEST_COMMIT"
+
+      - name: Clone upstream repository
+        if: steps.check-upstream.outputs.result == 'changed'
+        run: |
+          git clone https://github.com/fluent/fluentd-docker-image.git /tmp/fluentd-docker-image
+
+      - name: Generate Dockerfiles for all versions and architectures
+        if: steps.check-upstream.outputs.result == 'changed'
+        run: |
+          cd fluentd
+          VERSION=1.17 ARCH=debian ./scripts/generate.sh
+          VERSION=1.17 ARCH=arm64 ./scripts/generate.sh
+          VERSION=1.17 ARCH=armhf ./scripts/generate.sh
+          VERSION=1.18 ARCH=debian ./scripts/generate.sh
+          VERSION=1.18 ARCH=arm64 ./scripts/generate.sh
+          VERSION=1.18 ARCH=armhf ./scripts/generate.sh
+          VERSION=1.19 ARCH=debian ./scripts/generate.sh
+          VERSION=1.19 ARCH=arm64 ./scripts/generate.sh
+          VERSION=1.19 ARCH=armhf ./scripts/generate.sh
+
+      - name: Update .last-upstream-sync file
+        if: steps.check-upstream.outputs.result == 'changed'
+        run: |
+          cd fluentd
+          echo "${{ steps.get-sha.outputs.sha }}" > .last-upstream-sync
+
+      - name: Create Pull Request
+        if: steps.check-upstream.outputs.result == 'changed'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: sync/upstream-update-${{ github.run_number }}
+          title: Sync with upstream fluentd-docker-image
+          body: |
+            Automated sync with upstream fluent/fluentd-docker-image repository.
+
+            This PR updates the Dockerfiles to reflect the latest changes from upstream.
+
+            **Changes:**
+            - Updated Dockerfiles for v1.17 (debian, arm64, armhf)
+            - Updated Dockerfiles for v1.18 (debian, arm64, armhf)
+            - Updated Dockerfiles for v1.19 (debian, arm64, armhf)
+
+            **Upstream commit:** ${{ steps.get-sha.outputs.sha }}
+
+            This PR was created by the weekly sync workflow.
+          commit-message: "chore: sync with upstream fluentd-docker-image"
+          labels: automated, sync
+          delete-branch: true
